@@ -221,7 +221,7 @@ CUDNN_DNN_ROUTINE_EACH_R2(PERFTOOLS_GPUTOOLS_CUDNN_WRAP)
 
 // APIs available after R3:
 #if CUDNN_VERSION >= 3000
-#define CUDNN_DNN_ROUTINE_EACH_AFTER_R3(__macro)                    \
+#define CUDNN_DNN_ROUTINE_EACH_AFTER_R3(__macro)              \
   __macro(cudnnGetConvolutionBackwardFilterWorkspaceSize)     \
   __macro(cudnnGetConvolutionBackwardDataAlgorithm)           \
   __macro(cudnnGetConvolutionBackwardFilterAlgorithm)         \
@@ -399,28 +399,14 @@ class ScopedFilterDescriptor {
                  << ToString(status);
     }
 
-#if CUDNN_VERSION >= 5000
-    cudnnTensorFormat_t format;
-    switch (batch_descriptor.layout()) {
-      case dnn::DataLayout::kBatchYXDepth:
-        format = CUDNN_TENSOR_NHWC;
-        break;
-      case dnn::DataLayout::kBatchDepthYX:
-        format = CUDNN_TENSOR_NCHW;
-        break;
-      default:
-        LOG(FATAL) << "Unsupported tensor format "
-                   << DataLayoutString(batch_descriptor.layout());
-        break;
-    }
-#endif
-
     // TODO(b/23032134): Even if the filter layout is not supported,
-    // cudnnSetFilter4DDescriptor will return CUDNN_STATUS_SUCCESS because it
+    // cudnnSetFilter4DDescriptor_v4 will return CUDNN_STATUS_SUCCESS because it
     // does not take layout as an input. Maybe force cuDNN by giving wrong
     // inputs intentionally?
+    cudnnTensorFormat_t format;
     switch (filter_descriptor.layout()) {
       case dnn::FilterLayout::kOutputInputYX:
+        format = CUDNN_TENSOR_NCHW;
         break;
       default:
         LOG(FATAL) << "Unsupported filter format "
@@ -636,7 +622,7 @@ class ScopedActivationDescriptor {
   cudnnActivationDescriptor_t handle() const { return handle_; }
 
  private:
-  CUDAExecutor* parent_;             // Parent executor. Not owned.
+  CUDAExecutor* parent_;                // Parent executor. Not owned.
   cudnnActivationDescriptor_t handle_;  // Owned.
 
   SE_DISALLOW_COPY_AND_ASSIGN(ScopedActivationDescriptor);
@@ -655,7 +641,7 @@ bool CudnnSupport::DoConvolve(
   ScopedTensorDescriptor output_4d{parent_, output_descriptor,
                                    CUDNN_DATA_FLOAT};
   ScopedFilterDescriptor filter{parent_, filter_descriptor, batch_descriptor,
-        CUDNN_DATA_FLOAT};
+                                CUDNN_DATA_FLOAT};
   ScopedConvolutionDescriptor conv{parent_, convolution_descriptor};
 
   mutex_lock lock{dnn_handle_mutex_};
@@ -813,7 +799,7 @@ bool CudnnSupport::DoConvolveBackwardData(
   ScopedTensorDescriptor in_back_4d{parent_, input_descriptor,
                                     CUDNN_DATA_FLOAT};
   ScopedFilterDescriptor filter{parent_, filter_descriptor, input_descriptor,
-        CUDNN_DATA_FLOAT};
+                                CUDNN_DATA_FLOAT};
   ScopedConvolutionDescriptor conv{parent_, convolution_descriptor};
 
 #if CUDNN_VERSION < 5000
@@ -955,7 +941,7 @@ bool CudnnSupport::DoConvolveBackwardFilter(
         CUDNN_DATA_FLOAT};
   ScopedTensorDescriptor input_4d{parent_, input_descriptor, CUDNN_DATA_FLOAT};
   ScopedFilterDescriptor filter{parent_, filter_descriptor, input_descriptor,
-        CUDNN_DATA_FLOAT};
+                                CUDNN_DATA_FLOAT};
   ScopedConvolutionDescriptor conv{parent_, convolution_descriptor};
 
 #if CUDNN_VERSION < 5000
@@ -1252,7 +1238,7 @@ bool CudnnSupport::DoBiasAdd(Stream* stream,
         parent_, ToHandle(dnn_handle_), CUDNN_ADD_SAME_C, &alpha,
         bias_descriptor.handle(), biases.opaque(), &beta,
         input_descriptor.handle(), output_data->opaque());
-#endif // CUDNN_VERSION < 5000
+#endif  // CUDNN_VERSION < 5000
 
 #if CUDNN_VERSION >= 3000
   } else {
@@ -1519,7 +1505,7 @@ bool CudnnSupport::DeriveOutputBatchDescriptor(
     dnn::BatchDescriptor* output_batch_descriptor) {
   ScopedTensorDescriptor input_4d{parent_, batch_descriptor, CUDNN_DATA_FLOAT};
   ScopedFilterDescriptor filter{parent_, filter_descriptor, batch_descriptor,
-        CUDNN_DATA_FLOAT};
+                                CUDNN_DATA_FLOAT};
   ScopedConvolutionDescriptor conv{parent_, convolution_descriptor};
 
   int dims[4];
